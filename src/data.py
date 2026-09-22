@@ -4,26 +4,15 @@ import json
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Tuple
 
 import numpy as np
 import torch
+import tree_sitter_c
 from sklearn.model_selection import train_test_split
 from torch_geometric.data import Data
+from tree_sitter import Language, Parser
 
-TOKEN_PATTERN = re.compile(
-    r"""
-    //.*?$                         | # C++ single-line comment
-    /\*.*?\*/                      | # C-style comment
-    "(?:\\.|[^"\\])*"              | # string literal
-    '(?:\\.|[^'\\])*'              | # character literal
-    [A-Za-z_][A-Za-z0-9_]*         | # identifier/keyword
-    \d+(?:\.\d+)?                  | # number
-    ==|!=|<=|>=|->|\+\+|--|&&|\|\| |
-    [^\s]                            # any remaining symbol
-    """,
-    re.MULTILINE | re.DOTALL | re.VERBOSE,
-)
+C_LANGUAGE = Language(tree_sitter_c.language())
 
 KEYWORDS = {
     "alignas",
@@ -166,16 +155,13 @@ def tokenize_c_function(
     normalize: bool = False,
 ) -> list[str]:
     """
-    Lightweight C/C++ tokenizer.
-
-    This does not build an AST, CFG, or DFG. It creates a token graph
-    suitable for a simple GCN baseline.
+    Extract C tokens from Tree-sitter leaf nodes.
     """
 
     if not isinstance(function_code, str):
         raise TypeError("Function code must be a string.")
 
-    tokens = TOKEN_PATTERN.findall(function_code)
+    tokens, _ = parse_c_function(function_code)
     if normalize:
         tokens = [normalize_token(token) for token in tokens]
 
@@ -183,6 +169,65 @@ def tokenize_c_function(
         tokens = ["<EMPTY>"]
 
     return tokens
+
+
+def parse_c_function(function_code: str) -> tuple[list[str], list[tuple[int, int]]]:
+    """Return Tree-sitter leaf tokens and syntax-derived AST edges."""
+
+    if not isinstance(function_code, str):
+        raise TypeError("Function code must be a string.")
+
+    try:
+        parser = Parser(C_LANGUAGE)
+    except TypeError:
+        parser = Parser()
+        parser.set_language(C_LANGUAGE)
+    source = function_code.encode("utf-8")
+    tree = parser.parse(source)
+    leaves = []
+
+    def collect_leaves(node) -> None:
+        if node.child_count == 0:
+            text = source[node.start_byte : node.end_byte].decode(
+                "utf-8",
+                errors="replace",
+            )
+            if text:
+                leaves.append((node, text))
+            return
+        for child in node.children:
+            collect_leaves(child)
+
+    collect_leaves(tree.root_node)
+    if not leaves:
+        return ["<EMPTY>"], []
+
+    leaf_tokens = [text for _, text in leaves]
+    ast_edges = set()
+
+    def collect_named_nodes(node) -> list:
+        nodes = []
+        if node.is_named and node.child_count > 0:
+            nodes.append(node)
+        for child in node.children:
+            nodes.extend(collect_named_nodes(child))
+        return nodes
+
+    for ast_node in collect_named_nodes(tree.root_node):
+        covered = [
+            index
+            for index, (leaf, _) in enumerate(leaves)
+            if leaf.start_byte >= ast_node.start_byte
+            and leaf.end_byte <= ast_node.end_byte
+        ]
+        if len(covered) < 2:
+            continue
+        first, last = covered[0], covered[-1]
+        if first != last:
+            ast_edges.add((first, last))
+            ast_edges.add((last, first))
+
+    return leaf_tokens, sorted(ast_edges)
 
 
 def normalize_token(token: str) -> str:
@@ -375,11 +420,10 @@ def make_token_graph(
     if context_window < 1:
         raise ValueError("context_window must be at least 1.")
 
-    raw_tokens = tokenize_c_function(function_code)
-    tokens = tokenize_c_function(
-        function_code,
-        normalize=normalize_tokens,
-    )
+    raw_tokens, parsed_ast_edges = parse_c_function(function_code)
+    tokens = raw_tokens[:]
+    if normalize_tokens:
+        tokens = [normalize_token(token) for token in tokens]
     raw_tokens = raw_tokens[:max_tokens]
     tokens = tokens[:max_tokens]
 
@@ -394,7 +438,7 @@ def make_token_graph(
             edges[(left, right)] = 0
             edges[(right, left)] = 1
 
-    if structural_edges or ast_edges:
+    if structural_edges:
         matching_delimiters = {")": "(", "]": "[", "}": "{"}
         delimiter_stack = []
         opening_delimiters = set(matching_delimiters.values())
@@ -410,37 +454,15 @@ def make_token_graph(
                     if opening == expected:
                         delimiter_stack.pop(stack_index)
                         delimiter_pairs.append((opening_index, index))
-                        if structural_edges:
-                            edges[(opening_index, index)] = 2
-                            edges[(index, opening_index)] = 3
+                        edges[(opening_index, index)] = 2
+                        edges[(index, opening_index)] = 3
                         break
 
-        if ast_edges:
-            # Approximate AST hierarchy from nested delimiters and statement
-            # boundaries. These edges are intentionally separate from token
-            # adjacency so RGCN can learn relation-specific messages.
-            for parent_open, parent_close in delimiter_pairs:
-                children = [
-                    (child_open, child_close)
-                    for child_open, child_close in delimiter_pairs
-                    if parent_open < child_open
-                    and child_close < parent_close
-                    and not any(
-                        other_open > parent_open
-                        and other_close < parent_close
-                        and other_open < child_open
-                        and child_close < other_close
-                        for other_open, other_close in delimiter_pairs
-                    )
-                ]
-                for child_open, _ in children:
-                    edges[(parent_open, child_open)] = 4
-                    edges[(child_open, parent_open)] = 5
-
-            for index, token in enumerate(tokens[:-1]):
-                if token == ";":
-                    edges[(index, index + 1)] = 4
-                    edges[(index + 1, index)] = 5
+    if ast_edges:
+        for left, right in parsed_ast_edges:
+            if left < len(tokens) and right < len(tokens):
+                edges[(left, right)] = 4
+                edges[(right, left)] = 5
 
     if data_flow_edges:
         definition_indices = {}
@@ -527,7 +549,7 @@ def stratified_record_split(
     seed: int = 42,
     validation_size: float = 0.15,
     test_size: float = 0.15,
-) -> Tuple[list[dict], list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], list[dict]]:
     labels = [record["target"] for record in records]
     indices = np.arange(len(records))
 
