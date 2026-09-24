@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "devign-federated"
+version = "0.1.0"
+description = "Federated Learning with PyTorch and Flower (Quickstart Example)"
+license = {file = "LICENSE"}
+dependencies = [
+    "flwr",
+    "numpy",
+    "scikit-learn",
+    "torch",
+    "torch-geometric",
+    "tree-sitter",
+    "tree-sitter-c",
+]
+
+[tool.flwr.app]
+publisher = "devign"
+
+[tool.flwr.app.components]
+serverapp = "fl_server:app"
+clientapp = "fl_client:app"
+
+[tool.flwr.app.config]
+vocabulary = "data/federated/vocabulary.json"
+rounds = 1
+min_clients = 2
+local_epochs = 1
+batch_size = 32
+learning_rate = 0.001
+weight_decay = 0.0001
+embedding_dim = 128
+hidden_dim = 128
+dropout = 0.3
+max_tokens = 512
+context_window = 2
+structural_edges = true
+ast_edges = false
+data_flow_edges = false
+class_weights = false
+seed = 42
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
