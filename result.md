@@ -340,7 +340,7 @@ Confusion matrix:
 ## Federated learning
 
 ```bash
-flwr run . --stream --run-config "local_epochs=10" --run-config "rounds=5"
+flwr run . --stream --run-config "local_epochs=10" --run-config "rounds=5" --run-config 'mode="non-iid"'
 
 Final results:
 INFO :
@@ -401,4 +401,68 @@ INFO :      	 5: { 'accuracy': '5.7028e-01',
 INFO :      	      'auc': '6.0313e-01',
 INFO :      	      'loss': '2.2502e+00',
 INFO :      	      'mcc': '1.5770e-01'}}
+```
+
+```bash
+flwr run . --stream --run-config "local_epochs=10" --run-config "rounds=5" --run-config 'mode="iid"'
+
+INFO :      Final results:
+INFO :
+INFO :      	Global Arrays:
+INFO :      		ArrayRecord (11.688 MB)
+INFO :
+INFO :      	Aggregated ClientApp-side Train Metrics:
+INFO :      	{ 1: {'train-loss': '6.9112e-01'},
+INFO :      	 2: {'train-loss': '6.8931e-01'},
+INFO :      	 3: {'train-loss': '6.8930e-01'},
+INFO :      	 4: {'train-loss': '6.8930e-01'},
+INFO :      	 5: {'train-loss': '6.8930e-01'}}
+INFO :
+INFO :      	Aggregated ClientApp-side Evaluate Metrics:
+INFO :      	{ 1: { 'accuracy': '5.4054e-01',
+INFO :      	      'auc': '5.6250e-01',
+INFO :      	      'loss': '6.9005e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 2: { 'accuracy': '5.4054e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8988e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 3: { 'accuracy': '5.4054e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8990e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 4: { 'accuracy': '5.4054e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8990e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 5: { 'accuracy': '5.4054e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8990e-01',
+INFO :      	      'mcc': '0.0000e+00'}}
+INFO :
+INFO :      	ServerApp-side Evaluate Metrics:
+INFO :      	{ 0: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '5.0507e-01',
+INFO :      	      'loss': '7.0444e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 1: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '5.4903e-01',
+INFO :      	      'loss': '6.8985e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 2: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8928e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 3: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8929e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 4: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8929e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 5: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '5.0000e-01',
+INFO :      	      'loss': '6.8929e-01',
+INFO :      	      'mcc': '0.0000e+00'}}
 ```
