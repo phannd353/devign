@@ -93,7 +93,6 @@ def get_global_evaluate_fn(
             "structural_edges": config_value(context, "structural_edges", True),
             "ast_edges": config_value(context, "ast_edges", False),
             "data_flow_edges": config_value(context, "data_flow_edges", False),
-            "seed": config_value(context, "seed", 42),
             "vocabulary": vocabulary,
         }
         eval_graphs = records_to_graphs(eval_records, **graph_kwargs)
