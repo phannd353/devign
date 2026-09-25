@@ -48,6 +48,7 @@ ast_edges = false
 data_flow_edges = false
 class_weights = false
 seed = 42
+mode = 'non-iid'
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

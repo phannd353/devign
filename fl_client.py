@@ -26,7 +26,8 @@ def load_message_arrays(model: nn.Module, message: Message) -> None:
 @app.train()
 def train(message: Message, context: Context) -> Message:
     partition_id = context.node_config["partition-id"]
-    data_path = f"data/federated/non-iid/client_{int(partition_id) + 1}/train.json"
+    mode = config_value(context, "mode", "iid")
+    data_path = f"data/federated/{mode}/client_{int(partition_id) + 1}/train.json"
     model, device, train_loader, _, criterion = create_local_state(context, data_path)
     load_message_arrays(model, message)
 
@@ -76,7 +77,8 @@ def train(message: Message, context: Context) -> Message:
 @app.evaluate()
 def evaluate_client(message: Message, context: Context) -> Message:
     partition_id = context.node_config["partition-id"]
-    data_path = f"data/federated/non-iid/client_{int(partition_id) + 1}/validation.json"
+    mode = config_value(context, "mode", "iid")
+    data_path = f"data/federated/{mode}/client_{int(partition_id) + 1}/validation.json"
     model, device, _, validation_loader, criterion = create_local_state(
         context, data_path
     )

@@ -336,3 +336,69 @@ Confusion matrix:
 [[1498  731]
  [ 813 1056]]
 ```
+
+## Federated learning
+
+```bash
+flwr run . --stream --run-config "local_epochs=10" --run-config "rounds=5"
+
+Final results:
+INFO :
+INFO :      	Global Arrays:
+INFO :      		ArrayRecord (11.688 MB)
+INFO :
+INFO :      	Aggregated ClientApp-side Train Metrics:
+INFO :      	{ 1: {'train-loss': '5.9710e-01'},
+INFO :      	 2: {'train-loss': '3.7426e-01'},
+INFO :      	 3: {'train-loss': '1.7633e-01'},
+INFO :      	 4: {'train-loss': '9.5333e-02'},
+INFO :      	 5: {'train-loss': '8.0640e-02'}}
+INFO :
+INFO :      	Aggregated ClientApp-side Evaluate Metrics:
+INFO :      	{ 1: { 'accuracy': '5.5147e-01',
+INFO :      	      'auc': '6.1696e-01',
+INFO :      	      'loss': '6.8960e-01',
+INFO :      	      'mcc': '1.8787e-01'},
+INFO :      	 2: { 'accuracy': '5.9559e-01',
+INFO :      	      'auc': '6.8838e-01',
+INFO :      	      'loss': '7.0669e-01',
+INFO :      	      'mcc': '2.2747e-01'},
+INFO :      	 3: { 'accuracy': '6.3971e-01',
+INFO :      	      'auc': '6.9075e-01',
+INFO :      	      'loss': '9.6606e-01',
+INFO :      	      'mcc': '2.6065e-01'},
+INFO :      	 4: { 'accuracy': '6.3235e-01',
+INFO :      	      'auc': '6.9599e-01',
+INFO :      	      'loss': '1.3130e+00',
+INFO :      	      'mcc': '2.3589e-01'},
+INFO :      	 5: { 'accuracy': '6.3235e-01',
+INFO :      	      'auc': '6.8722e-01',
+INFO :      	      'loss': '1.4793e+00',
+INFO :      	      'mcc': '2.2944e-01'}}
+INFO :
+INFO :      	ServerApp-side Evaluate Metrics:
+INFO :      	{ 0: { 'accuracy': '5.4392e-01',
+INFO :      	      'auc': '4.7855e-01',
+INFO :      	      'loss': '7.0167e-01',
+INFO :      	      'mcc': '0.0000e+00'},
+INFO :      	 1: { 'accuracy': '5.7321e-01',
+INFO :      	      'auc': '5.9364e-01',
+INFO :      	      'loss': '6.8616e-01',
+INFO :      	      'mcc': '1.2409e-01'},
+INFO :      	 2: { 'accuracy': '5.6552e-01',
+INFO :      	      'auc': '6.0228e-01',
+INFO :      	      'loss': '8.6201e-01',
+INFO :      	      'mcc': '1.4356e-01'},
+INFO :      	 3: { 'accuracy': '5.5893e-01',
+INFO :      	      'auc': '5.9947e-01',
+INFO :      	      'loss': '1.4015e+00',
+INFO :      	      'mcc': '1.3944e-01'},
+INFO :      	 4: { 'accuracy': '5.7613e-01',
+INFO :      	      'auc': '6.0071e-01',
+INFO :      	      'loss': '1.9668e+00',
+INFO :      	      'mcc': '1.6775e-01'},
+INFO :      	 5: { 'accuracy': '5.7028e-01',
+INFO :      	      'auc': '6.0313e-01',
+INFO :      	      'loss': '2.2502e+00',
+INFO :      	      'mcc': '1.5770e-01'}}
+```

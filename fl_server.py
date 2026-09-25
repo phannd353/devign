@@ -4,7 +4,7 @@ import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 
 from src.data import load_json_records, records_to_graphs
 from src.federated import (
@@ -29,6 +29,7 @@ def main(grid: Grid, context: Context) -> None:
     dropout = config_value(context, "dropout", 0.30)
     learning_rate = config_value(context, "learning_rate", 1e-3)
     output = config_value(context, "output", "federated_checkpoint.pt")
+    mode = config_value(context, "mode", "iid")
 
     vocabulary = load_vocabulary(vocabulary_path)
     model = create_model(len(vocabulary), embedding_dim, hidden_dim, dropout)
@@ -50,6 +51,7 @@ def main(grid: Grid, context: Context) -> None:
                 "learning_rate": learning_rate,
                 "local_epochs": config_value(context, "local_epochs", 1),
                 "weight_decay": config_value(context, "weight_decay", 1e-4),
+                "mode": mode,
             }
         ),
         num_rounds=rounds,
@@ -85,7 +87,9 @@ def get_global_evaluate_fn(
         model.to(device)
 
         # Load entire eval set
-        eval_records = load_json_records("data/federated/non-iid/server/test.json")
+        batch_size = config_value(context, "batch_size", 32)
+        mode = config_value(context, "mode", "iid")
+        eval_records = load_json_records(f"data/federated/{mode}/server/test.json")
         graph_kwargs = {
             "max_tokens": config_value(context, "max_tokens", 512),
             "context_window": config_value(context, "context_window", 2),
@@ -96,7 +100,6 @@ def get_global_evaluate_fn(
             "vocabulary": vocabulary,
         }
         eval_graphs = records_to_graphs(eval_records, **graph_kwargs)
-        batch_size = config_value(context, "batch_size", 32)
         eval_loader = DataLoader(eval_graphs, batch_size=batch_size, shuffle=True)
         criterion = build_criterion(
             device, config_value(context, "class_weights", False), eval_loader
