@@ -12,7 +12,7 @@ from flwr.app import (
 )
 from flwr.clientapp import ClientApp
 
-from src.federated import create_local_state
+from src.federated import config_value, create_local_state
 from src.training import evaluate, train_one_epoch
 
 app = ClientApp()
