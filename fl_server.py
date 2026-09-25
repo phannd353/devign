@@ -103,9 +103,16 @@ def get_global_evaluate_fn(
         )
 
         # Evaluate the global model on the test set
-        test_loss, test_acc = evaluate(model, eval_loader, criterion, device)
+        metrics = evaluate(model, eval_loader, criterion, device)
 
         # Return the evaluation metrics
-        return MetricRecord({"accuracy": float(test_acc), "loss": float(test_loss)})
+        return MetricRecord(
+            {
+                "accuracy": float(metrics["accuracy"]),
+                "loss": float(metrics["loss"]),
+                "mcc": float(metrics["mcc"]),
+                "auc": float(metrics["auc"]),
+            }
+        )
 
     return global_evaluate
