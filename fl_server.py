@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 import torch
-from flwr.app import ArrayRecord, ConfigRecord, Context
+from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
+from torch_geometric.data import DataLoader
 
-from src.federated import create_model, load_vocabulary
-
-
-def config_value(context: Context, name: str, default):
-    value = context.run_config.get(name, default)
-    if isinstance(default, bool):
-        return bool(value)
-    if isinstance(default, int):
-        return int(value)
-    if isinstance(default, float):
-        return float(value)
-    return value
-
+from src.data import load_json_records, records_to_graphs
+from src.federated import (
+    build_criterion,
+    config_value,
+    create_model,
+    load_vocabulary,
+)
+from src.model import TokenGraphRGCN
+from src.training import evaluate
 
 app = ServerApp()
 
@@ -56,6 +53,7 @@ def main(grid: Grid, context: Context) -> None:
             }
         ),
         num_rounds=rounds,
+        evaluate_fn=get_global_evaluate_fn(context, model, vocabulary),
     )
 
     final_state = result.arrays.to_torch_state_dict()
@@ -71,3 +69,44 @@ def main(grid: Grid, context: Context) -> None:
         output,
     )
     print(f"Saved final global model to: {output}")
+
+
+def get_global_evaluate_fn(
+    context: Context, model: TokenGraphRGCN, vocabulary: dict[str, int]
+):
+    """Return an evaluation function for server-side evaluation."""
+
+    def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
+        """Evaluate model on central data."""
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Load the model and initialize it with the received weights
+        model.load_state_dict(arrays.to_torch_state_dict())
+        model.to(device)
+
+        # Load entire eval set
+        eval_records = load_json_records("data/federated/non-iid/server/test.json")
+        graph_kwargs = {
+            "max_tokens": config_value(context, "max_tokens", 512),
+            "context_window": config_value(context, "context_window", 2),
+            "normalize_tokens": config_value(context, "normalize_tokens", False),
+            "structural_edges": config_value(context, "structural_edges", True),
+            "ast_edges": config_value(context, "ast_edges", False),
+            "data_flow_edges": config_value(context, "data_flow_edges", False),
+            "seed": config_value(context, "seed", 42),
+            "vocabulary": vocabulary,
+        }
+        eval_graphs = records_to_graphs(eval_records, **graph_kwargs)
+        batch_size = config_value(context, "batch_size", 32)
+        eval_loader = DataLoader(eval_graphs, batch_size=batch_size, shuffle=True)
+        criterion = build_criterion(
+            device, config_value(context, "class_weights", False), eval_loader
+        )
+
+        # Evaluate the global model on the test set
+        test_loss, test_acc = evaluate(model, eval_loader, criterion, device)
+
+        # Return the evaluation metrics
+        return MetricRecord({"accuracy": float(test_acc), "loss": float(test_loss)})
+
+    return global_evaluate

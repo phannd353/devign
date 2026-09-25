@@ -1,17 +1,34 @@
 from __future__ import annotations
 
 import json
-from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
+from flwr.app import Context
 from torch_geometric.loader import DataLoader
 
 from src.data import load_json_records, records_to_graphs, stratified_record_split
 from src.model import TokenGraphRGCN
-from src.training import evaluate, train_one_epoch
+from src.reproducibility import set_seed
+
+
+def config_value[T](context: Context, name: str, default: T) -> T:
+    """Read per-client values from node config, then shared run config."""
+
+    if name in context.node_config:
+        value = context.node_config[name]
+    else:
+        value = context.run_config.get(name, default)
+
+    if isinstance(default, bool):
+        return bool(value)
+    if isinstance(default, int):
+        return int(value)
+    if isinstance(default, float):
+        return float(value)
+    return value
 
 
 def load_vocabulary(path: str) -> dict[str, int]:
@@ -101,3 +118,43 @@ def build_criterion(device: torch.device, use_class_weights: bool, loader: DataL
         raise ValueError("A client needs both classes to use class weights.")
     weights = (len(labels) / (2.0 * counts)).to(device)
     return nn.CrossEntropyLoss(weight=weights)
+
+
+def create_local_state(context: Context, data_path: str):
+    set_seed(config_value(context, "seed", 42))
+    vocabulary = load_vocabulary(
+        config_value(context, "vocabulary", "shared_vocabulary.json")
+    )
+    model = create_model(
+        vocabulary_size=len(vocabulary),
+        embedding_dim=config_value(context, "embedding_dim", 128),
+        hidden_dim=config_value(context, "hidden_dim", 128),
+        dropout=config_value(context, "dropout", 0.30),
+    )
+    device = torch.device(
+        config_value(
+            context,
+            "device",
+            "cuda" if torch.cuda.is_available() else "cpu",
+        )
+    )
+    model.to(device)
+
+    train_loader, validation_loader = build_client_loaders(
+        data_path=data_path,
+        vocabulary=vocabulary,
+        batch_size=config_value(context, "batch_size", 32),
+        max_tokens=config_value(context, "max_tokens", 512),
+        context_window=config_value(context, "context_window", 2),
+        normalize_tokens=config_value(context, "normalize_tokens", False),
+        structural_edges=config_value(context, "structural_edges", True),
+        ast_edges=config_value(context, "ast_edges", False),
+        data_flow_edges=config_value(context, "data_flow_edges", False),
+        seed=config_value(context, "seed", 42),
+    )
+    criterion = build_criterion(
+        device,
+        config_value(context, "class_weights", False),
+        train_loader,
+    )
+    return model, device, train_loader, validation_loader, criterion

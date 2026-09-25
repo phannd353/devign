@@ -19,6 +19,12 @@ dependencies = [
 
 [tool.flwr.app]
 publisher = "devign"
+fab-include = [
+    "pyproject.toml",
+    "fl_client.py",
+    "fl_server.py",
+    "src/",
+]
 
 [tool.flwr.app.components]
 serverapp = "fl_server:app"

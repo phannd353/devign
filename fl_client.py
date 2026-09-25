@@ -12,75 +12,10 @@ from flwr.app import (
 )
 from flwr.clientapp import ClientApp
 
-from src.federated import (
-    build_client_loaders,
-    build_criterion,
-    create_model,
-    load_vocabulary,
-)
-from src.reproducibility import set_seed
+from src.federated import create_local_state
 from src.training import evaluate, train_one_epoch
 
 app = ClientApp()
-
-
-def config_value[T](context: Context, name: str, default: T) -> T:
-    """Read per-client values from node config, then shared run config."""
-
-    if name in context.node_config:
-        value = context.node_config[name]
-    else:
-        value = context.run_config.get(name, default)
-
-    if isinstance(default, bool):
-        return bool(value)
-    if isinstance(default, int):
-        return int(value)
-    if isinstance(default, float):
-        return float(value)
-    return value
-
-
-def create_local_state(context: Context):
-    set_seed(config_value(context, "seed", 42))
-    vocabulary = load_vocabulary(
-        config_value(context, "vocabulary", "shared_vocabulary.json")
-    )
-    model = create_model(
-        vocabulary_size=len(vocabulary),
-        embedding_dim=config_value(context, "embedding_dim", 128),
-        hidden_dim=config_value(context, "hidden_dim", 128),
-        dropout=config_value(context, "dropout", 0.30),
-    )
-    device = torch.device(
-        config_value(
-            context,
-            "device",
-            "cuda" if torch.cuda.is_available() else "cpu",
-        )
-    )
-    model.to(device)
-
-    partition_id = context.node_config["partition-id"]
-    data_path = f"data/federated/non-iid/client_{int(partition_id) + 1}/train.json"
-    train_loader, validation_loader = build_client_loaders(
-        data_path=data_path,
-        vocabulary=vocabulary,
-        batch_size=config_value(context, "batch_size", 32),
-        max_tokens=config_value(context, "max_tokens", 512),
-        context_window=config_value(context, "context_window", 2),
-        normalize_tokens=config_value(context, "normalize_tokens", False),
-        structural_edges=config_value(context, "structural_edges", True),
-        ast_edges=config_value(context, "ast_edges", False),
-        data_flow_edges=config_value(context, "data_flow_edges", False),
-        seed=config_value(context, "seed", 42),
-    )
-    criterion = build_criterion(
-        device,
-        config_value(context, "class_weights", False),
-        train_loader,
-    )
-    return model, device, train_loader, validation_loader, criterion
 
 
 def load_message_arrays(model: nn.Module, message: Message) -> None:
@@ -91,9 +26,8 @@ def load_message_arrays(model: nn.Module, message: Message) -> None:
 @app.train()
 def train(message: Message, context: Context) -> Message:
     partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-
-    model, device, train_loader, _, criterion = create_local_state(context)
+    data_path = f"data/federated/non-iid/client_{int(partition_id) + 1}/train.json"
+    model, device, train_loader, _, criterion = create_local_state(context, data_path)
     load_message_arrays(model, message)
 
     config = message.content.get("config")
@@ -141,7 +75,11 @@ def train(message: Message, context: Context) -> Message:
 
 @app.evaluate()
 def evaluate_client(message: Message, context: Context) -> Message:
-    model, device, _, validation_loader, criterion = create_local_state(context)
+    partition_id = context.node_config["partition-id"]
+    data_path = f"data/federated/non-iid/client_{int(partition_id) + 1}/validation.json"
+    model, device, _, validation_loader, criterion = create_local_state(
+        context, data_path
+    )
     load_message_arrays(model, message)
     metrics = evaluate(model, validation_loader, criterion, device)
     return Message(
